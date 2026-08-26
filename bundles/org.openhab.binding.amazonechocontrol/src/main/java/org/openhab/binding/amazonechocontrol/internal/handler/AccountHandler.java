@@ -125,6 +125,7 @@ public class AccountHandler extends BaseBridgeHandler implements PushConnection.
     private @Nullable ScheduledFuture<?> checkDataJob;
     private @Nullable ScheduledFuture<?> updateSmartHomeStateJob;
     private @Nullable ScheduledFuture<?> refreshActivityJob;
+    private @Nullable ScheduledFuture<?> activityPollingJob;
     private @Nullable ScheduledFuture<?> refreshSmartHomeAfterCommandJob;
     private final Object synchronizeSmartHomeJobScheduler = new Object();
 
@@ -179,6 +180,17 @@ public class AccountHandler extends BaseBridgeHandler implements PushConnection.
                 pollingIntervalSkills);
         updateSmartHomeStateJob = scheduler.scheduleWithFixedDelay(() -> updateSmartHomeState(null), 20, 10,
                 TimeUnit.SECONDS);
+
+        int pollingInterval = handlerConfig.activityPollingInterval;
+        if (pollingInterval > 0) {
+            if (handlerConfig.activityRequestWindow < pollingInterval) {
+                logger.warn(
+                        "activityRequestWindow ({}s) is smaller than activityPollingInterval ({}s) - commands spoken between two polls will be missed",
+                        handlerConfig.activityRequestWindow, pollingInterval);
+            }
+            activityPollingJob = scheduler.scheduleWithFixedDelay(this::pollActivity, pollingInterval, pollingInterval,
+                    TimeUnit.SECONDS);
+        }
     }
 
     @Override
@@ -197,20 +209,7 @@ public class AccountHandler extends BaseBridgeHandler implements PushConnection.
                 }
                 updateState(CHANNEL_REFRESH_ACTIVITY, OnOffType.ON);
                 try {
-                    List<CustomerHistoryRecordTO> records = getCustomerActivity(null);
-                    logger.debug("Activity request returned {} record(s), {} echo handler(s) registered",
-                            records.size(), echoHandlers.size());
-                    for (CustomerHistoryRecordTO record : records) {
-                        String[] keyParts = record.recordKey.split("#");
-                        String serialNumber = keyParts[keyParts.length - 1];
-                        EchoHandler echoHandler = echoHandlers.get(serialNumber);
-                        if (echoHandler == null) {
-                            logger.debug("No echo handler for activity record serial ending ...{}",
-                                    serialNumber.substring(Math.max(0, serialNumber.length() - 6)));
-                            continue;
-                        }
-                        echoHandler.handleRequestedActivity(record);
-                    }
+                    dispatchActivityRecords(true);
                 } finally {
                     updateState(CHANNEL_REFRESH_ACTIVITY, OnOffType.OFF);
                 }
@@ -323,6 +322,11 @@ public class AccountHandler extends BaseBridgeHandler implements PushConnection.
 
     private void cleanup() {
         logger.debug("cleanup {}", getThing().getUID().getAsString());
+        ScheduledFuture<?> activityPollingJob = this.activityPollingJob;
+        if (activityPollingJob != null) {
+            activityPollingJob.cancel(true);
+            this.activityPollingJob = null;
+        }
         ScheduledFuture<?> updateSmartHomeStateJob = this.updateSmartHomeStateJob;
         if (updateSmartHomeStateJob != null) {
             updateSmartHomeStateJob.cancel(true);
@@ -784,6 +788,36 @@ public class AccountHandler extends BaseBridgeHandler implements PushConnection.
                 break;
             default:
                 logger.warn("Detected unknown command from activity stream: {}", pushCommand);
+        }
+    }
+
+    private void pollActivity() {
+        dispatchActivityRecords(false);
+    }
+
+    /**
+     * Requests the voice history and hands each record to its echo handler. A manual refresh replays records
+     * from before the handler started; the polling path never does, so a restart cannot re-fire rules with
+     * commands that were already handled.
+     */
+    private void dispatchActivityRecords(boolean replayHistory) {
+        List<CustomerHistoryRecordTO> records = getCustomerActivity(null);
+        logger.debug("Activity request returned {} record(s), {} echo handler(s) registered", records.size(),
+                echoHandlers.size());
+        for (CustomerHistoryRecordTO record : records) {
+            String[] keyParts = record.recordKey.split("#");
+            String serialNumber = keyParts[keyParts.length - 1];
+            EchoHandler echoHandler = echoHandlers.get(serialNumber);
+            if (echoHandler == null) {
+                logger.debug("No echo handler for activity record serial ending ...{}",
+                        serialNumber.substring(Math.max(0, serialNumber.length() - 6)));
+                continue;
+            }
+            if (replayHistory) {
+                echoHandler.handleRequestedActivity(record);
+            } else {
+                echoHandler.handlePushActivity(record);
+            }
         }
     }
 
