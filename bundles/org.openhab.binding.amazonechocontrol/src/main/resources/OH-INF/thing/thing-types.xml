@@ -49,12 +49,12 @@
 					the server.</description>
 				<default>10</default>
 			</parameter>
-			<parameter name="activityRequestWindow" type="integer" min="60" unit="s">
+			<parameter name="activityRequestWindow" type="integer" unit="s">
 				<advanced>true</advanced>
 				<label>Activity Request Window</label>
 				<description>The number of seconds of voice history an activity request covers, counted backwards from the
 					request
-					time.</description>
+					time. The recommended minimum is 60 seconds.</description>
 				<default>120</default>
 			</parameter>
 		</config-description>
