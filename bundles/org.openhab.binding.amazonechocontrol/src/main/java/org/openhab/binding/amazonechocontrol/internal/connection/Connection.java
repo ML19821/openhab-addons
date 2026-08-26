@@ -1390,9 +1390,15 @@ public class Connection {
         }
     }
 
+    // Amazon answers this endpoint with 400 ThrottlingException for the binding's iOS-app agent and 200
+    // for a browser agent; a quiet window of hours does not clear the 400 (measured 2026-08-26).
+    private static final String NOTIFICATIONS_USER_AGENT = "Mozilla/5.0 (Linux; Android 10) "
+            + "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/83.0.4103.101 Mobile Safari/537.36";
+
     public List<NotificationTO> getNotifications() throws ConnectionException {
         // propagates the exception: an empty list is indistinguishable from "no notifications set"
         return requestBuilder.get(getAlexaServer() + "/api/notifications")
+                .withHeader("User-Agent", NOTIFICATIONS_USER_AGENT)
                 .syncSend(NotificationListResponseTO.class).notifications;
     }
 
