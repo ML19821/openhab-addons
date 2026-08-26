@@ -131,6 +131,8 @@ See section _Smart Home Devices_ below for more information.
 | `pollingIntervalSmartHomeAlexa` | 30      | Defines the time in seconds for openHAB to pull the state of the Alexa connected devices. The minimum is 10 seconds.                                                                                             |
 | `pollingIntervalSmartSkills`    | 120     | Defines the time in seconds for openHAB to pull the state of the over a skill connected devices. The minimum is 60 seconds.                                                                                      |
 | `activityRequestDelay`          | 10      | The number of seconds between a voice command was detected and the received command is requested from the server. The minimum is 2 seconds. Lower values improve response time but may result in loss of events. |
+| `activityRequestWindow`         | 120     | The number of seconds of voice history a request covers, counted backwards from the request time. When polling, the window must be at least as large as the polling interval, otherwise commands spoken between two polls are missed. The recommended minimum is 60 seconds. |
+| `activityPollingInterval`       | 0       | The number of seconds between automatic voice history requests, meant for accounts that no longer receive push events. 0 disables polling. Comparable projects poll every 60 seconds and still see occasional rate limiting, so do not go lower without a reason. |
 
 ### Channels
 
