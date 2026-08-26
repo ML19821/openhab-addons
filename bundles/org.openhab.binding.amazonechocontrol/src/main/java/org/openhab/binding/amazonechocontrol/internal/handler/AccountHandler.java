@@ -197,13 +197,19 @@ public class AccountHandler extends BaseBridgeHandler implements PushConnection.
                 }
                 updateState(CHANNEL_REFRESH_ACTIVITY, OnOffType.ON);
                 try {
-                    for (CustomerHistoryRecordTO record : getCustomerActivity(null)) {
+                    List<CustomerHistoryRecordTO> records = getCustomerActivity(null);
+                    logger.debug("Activity request returned {} record(s), {} echo handler(s) registered",
+                            records.size(), echoHandlers.size());
+                    for (CustomerHistoryRecordTO record : records) {
                         String[] keyParts = record.recordKey.split("#");
                         String serialNumber = keyParts[keyParts.length - 1];
                         EchoHandler echoHandler = echoHandlers.get(serialNumber);
-                        if (echoHandler != null) {
-                            echoHandler.handlePushActivity(record);
+                        if (echoHandler == null) {
+                            logger.debug("No echo handler for activity record serial ending ...{}",
+                                    serialNumber.substring(Math.max(0, serialNumber.length() - 6)));
+                            continue;
                         }
+                        echoHandler.handleRequestedActivity(record);
                     }
                 } finally {
                     updateState(CHANNEL_REFRESH_ACTIVITY, OnOffType.OFF);

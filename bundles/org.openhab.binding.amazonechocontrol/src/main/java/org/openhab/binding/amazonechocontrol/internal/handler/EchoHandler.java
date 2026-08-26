@@ -957,6 +957,16 @@ public class EchoHandler extends BaseThingHandler {
         }
     }
 
+    /**
+     * An explicit refresh also delivers records from before the handler started, which the startup guard in
+     * {@link #handlePushActivity(CustomerHistoryRecordTO)} would otherwise drop.
+     */
+    public synchronized void handleRequestedActivity(CustomerHistoryRecordTO customerHistoryRecord) {
+        lastCustomerHistoryRecordTimestamp = Math.min(lastCustomerHistoryRecordTimestamp,
+                customerHistoryRecord.timestamp - 1);
+        handlePushActivity(customerHistoryRecord);
+    }
+
     public synchronized void handlePushActivity(CustomerHistoryRecordTO customerHistoryRecord) {
         long recordTimestamp = customerHistoryRecord.timestamp;
         if (recordTimestamp <= lastCustomerHistoryRecordTimestamp) {
