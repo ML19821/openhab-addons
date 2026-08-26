@@ -165,6 +165,7 @@ public class AccountHandler extends BaseBridgeHandler implements PushConnection.
         handlerConfig = getConfig().as(AccountHandlerConfig.class);
 
         updateStatus(ThingStatus.OFFLINE, ThingStatusDetail.CONFIGURATION_PENDING, "Wait for login");
+        updateState(CHANNEL_REFRESH_ACTIVITY, OnOffType.OFF);
 
         nextDataRefresh = 0;
         nextLoginCheck = 0;
@@ -190,13 +191,22 @@ public class AccountHandler extends BaseBridgeHandler implements PushConnection.
             }
             String channelId = channelUID.getId();
             if (channelId.equals(CHANNEL_REFRESH_ACTIVITY) && command instanceof OnOffType) {
-                for (CustomerHistoryRecordTO record : getCustomerActivity(null)) {
-                    String[] keyParts = record.recordKey.split("#");
-                    String serialNumber = keyParts[keyParts.length - 1];
-                    EchoHandler echoHandler = echoHandlers.get(serialNumber);
-                    if (echoHandler != null) {
-                        echoHandler.handlePushActivity(record);
+                if (command != OnOffType.ON) {
+                    updateState(CHANNEL_REFRESH_ACTIVITY, OnOffType.OFF);
+                    return;
+                }
+                updateState(CHANNEL_REFRESH_ACTIVITY, OnOffType.ON);
+                try {
+                    for (CustomerHistoryRecordTO record : getCustomerActivity(null)) {
+                        String[] keyParts = record.recordKey.split("#");
+                        String serialNumber = keyParts[keyParts.length - 1];
+                        EchoHandler echoHandler = echoHandlers.get(serialNumber);
+                        if (echoHandler != null) {
+                            echoHandler.handlePushActivity(record);
+                        }
                     }
+                } finally {
+                    updateState(CHANNEL_REFRESH_ACTIVITY, OnOffType.OFF);
                 }
             } else if (channelId.equals(CHANNEL_SEND_MESSAGE) && command instanceof StringType) {
                 String commandValue = command.toFullString();
