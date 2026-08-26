@@ -185,7 +185,7 @@ public class AccountHandler extends BaseBridgeHandler implements PushConnection.
         if (pollingInterval > 0) {
             if (handlerConfig.activityRequestWindow < pollingInterval) {
                 logger.warn(
-                        "activityRequestWindow ({}s) is smaller than activityPollingInterval ({}s) - commands spoken between two polls will be missed",
+                        "activityRequestWindow ({}s) is smaller than activityPollingInterval ({}s) - commands between two polls will be missed",
                         handlerConfig.activityRequestWindow, pollingInterval);
             }
             activityPollingJob = scheduler.scheduleWithFixedDelay(this::pollActivity, pollingInterval, pollingInterval,
@@ -795,11 +795,6 @@ public class AccountHandler extends BaseBridgeHandler implements PushConnection.
         dispatchActivityRecords(false);
     }
 
-    /**
-     * Requests the voice history and hands each record to its echo handler. A manual refresh replays records
-     * from before the handler started; the polling path never does, so a restart cannot re-fire rules with
-     * commands that were already handled.
-     */
     private void dispatchActivityRecords(boolean replayHistory) {
         List<CustomerHistoryRecordTO> records = getCustomerActivity(null);
         logger.debug("Activity request returned {} record(s), {} echo handler(s) registered", records.size(),
