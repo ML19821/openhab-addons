@@ -776,7 +776,7 @@ public class AccountHandler extends BaseBridgeHandler implements PushConnection.
             return List.of();
         }
         long realTimestamp = Objects.requireNonNullElse(timestamp, System.currentTimeMillis());
-        long startTimestamp = realTimestamp - 900000;
+        long startTimestamp = realTimestamp - handlerConfig.activityRequestWindow * 1000L;
         long endTimestamp = realTimestamp + 30000;
 
         return connection.getActivities(startTimestamp, endTimestamp);
