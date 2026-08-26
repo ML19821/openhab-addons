@@ -27,4 +27,5 @@ public class AccountHandlerConfig {
     public int pollingIntervalSmartSkills = 120;
     public int activityRequestDelay = 10;
     public int activityRequestWindow = 120;
+    public int activityPollingInterval = 0;
 }
