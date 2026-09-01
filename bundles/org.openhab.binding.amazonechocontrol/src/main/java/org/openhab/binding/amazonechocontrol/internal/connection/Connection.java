@@ -47,6 +47,7 @@ import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.stream.Collectors;
@@ -163,6 +164,7 @@ public class Connection {
     private final Map<Integer, Volume> volumes = Collections.synchronizedMap(new LinkedHashMap<>());
     private final Map<String, LinkedBlockingQueue<QueueObject>> devices = Collections
             .synchronizedMap(new LinkedHashMap<>());
+    private final AtomicLong loginGeneration = new AtomicLong();
 
     private final Map<TimerType, ScheduledFuture<?>> timers = new ConcurrentHashMap<>();
     private final Map<TimerType, Lock> locks = new ConcurrentHashMap<>();
@@ -517,6 +519,16 @@ public class Connection {
         return timers.get(TimerType.DEVICES);
     }
 
+    long currentLoginGeneration() {
+        return loginGeneration.get();
+    }
+
+    int queuedSequenceNodeCount() {
+        synchronized (devices) {
+            return devices.values().stream().mapToInt(LinkedBlockingQueue::size).sum();
+        }
+    }
+
     // current value in compute can be null
     private void replaceTimer(TimerType type, @Nullable ScheduledFuture<?> newTimer) {
         timers.compute(type, (timerType, oldTimer) -> {
@@ -553,24 +565,36 @@ public class Connection {
         customerName = null;
         accessToken = null;
 
-        replaceTimer(TimerType.ANNOUNCEMENT, null);
-        announcements.clear();
-        replaceTimer(TimerType.TTS, null);
-        textToSpeeches.clear();
-        replaceTimer(TimerType.VOLUME, null);
-        volumes.clear();
-        replaceTimer(TimerType.DEVICES, null);
-        replaceTimer(TimerType.TEXT_COMMAND, null);
-        textCommands.clear();
+        loginGeneration.incrementAndGet();
+        cancelPendingWork(TimerType.ANNOUNCEMENT, announcements::clear);
+        cancelPendingWork(TimerType.TTS, textToSpeeches::clear);
+        cancelPendingWork(TimerType.VOLUME, volumes::clear);
+        cancelPendingWork(TimerType.TEXT_COMMAND, textCommands::clear);
+        cancelPendingWork(TimerType.DEVICES, this::drainDeviceQueues);
+    }
 
-        devices.values().forEach((queueObjects) -> queueObjects.forEach((queueObject) -> {
-            Future<?> future = queueObject.future;
-            if (future != null) {
-                future.cancel(true);
-                queueObject.future = null;
-            }
-        }));
-        devices.clear();
+    private void drainDeviceQueues() {
+        synchronized (devices) {
+            devices.values().forEach((queueObjects) -> queueObjects.forEach((queueObject) -> {
+                Future<?> future = queueObject.future;
+                if (future != null) {
+                    future.cancel(true);
+                    queueObject.future = null;
+                }
+            }));
+            devices.clear();
+        }
+    }
+
+    private void cancelPendingWork(TimerType type, Runnable clearRegistrations) {
+        Lock lock = Objects.requireNonNull(locks.computeIfAbsent(type, k -> new ReentrantLock()));
+        lock.lock();
+        try {
+            replaceTimer(type, null);
+            clearRegistrations.run();
+        } finally {
+            lock.unlock();
+        }
     }
 
     // commands and states
@@ -1071,6 +1095,7 @@ public class Connection {
     private void executeSequenceCommandWithVolume(List<DeviceTO> devices, @Nullable String command,
             Map<String, Object> parameters, List<@Nullable Integer> ttsVolumes,
             List<@Nullable Integer> standardVolumes) {
+        long generation = loginGeneration.get();
         JsonArray serialNodesToExecute = new JsonArray();
 
         JsonArray ttsVolumeNodesToExecute = new JsonArray();
@@ -1125,11 +1150,12 @@ public class Connection {
         }
 
         if (!serialNodesToExecute.isEmpty()) {
-            executeSequenceNodes(devices.stream().map(d -> d.serialNumber).toList(), serialNodesToExecute, false);
+            executeSequenceNodes(devices.stream().map(d -> d.serialNumber).toList(), serialNodesToExecute, false,
+                    generation);
 
             if (!standardVolumeNodesToExecute.isEmpty() && "AlexaAnnouncement".equals(command)) {
                 executeSequenceNodes(devices.stream().map(d -> d.serialNumber).toList(), standardVolumeNodesToExecute,
-                        true);
+                        true, generation);
             }
         }
     }
@@ -1139,11 +1165,12 @@ public class Connection {
     // Alexa.SingASong.Play, Alexa.TellStory.Play, Alexa.Speak (textToSpeach)
     public void executeSequenceCommand(DeviceTO device, String command, Map<String, Object> parameters) {
         JsonObject nodeToExecute = createExecutionNode(device.deviceType, device.serialNumber, command, parameters);
-        executeSequenceNode(List.of(device.serialNumber), nodeToExecute);
+        executeSequenceNode(List.of(device.serialNumber), nodeToExecute, loginGeneration.get());
     }
 
-    private void executeSequenceNode(List<String> serialNumbers, JsonObject nodeToExecute) {
+    void executeSequenceNode(List<String> serialNumbers, JsonObject nodeToExecute, long generation) {
         QueueObject queueObject = new QueueObject();
+        queueObject.generation = generation;
         queueObject.deviceSerialNumbers = serialNumbers;
         queueObject.nodeToExecute = nodeToExecute;
         List<String> serials = new ArrayList<>();
@@ -1157,7 +1184,7 @@ public class Connection {
         logger.debug("Added {} device(s) {} to queue", queueObject.hashCode(), serials);
     }
 
-    private void handleExecuteSequenceNode() {
+    void handleExecuteSequenceNode() {
         Lock lock = Objects.requireNonNull(locks.computeIfAbsent(TimerType.DEVICES, k -> new ReentrantLock()));
         if (lock.tryLock()) {
             try {
@@ -1170,6 +1197,12 @@ public class Connection {
                     if (queueObjects != null) {
                         QueueObject queueObject = queueObjects.peek();
                         if (queueObject != null) {
+                            if (queueObject.future == null && queueObject.generation != loginGeneration.get()) {
+                                queueObjects.poll();
+                                logger.debug("Dropped {} device(s) {} queued before the last logout",
+                                        queueObject.hashCode(), queueObject.deviceSerialNumbers);
+                                continue;
+                            }
                             Future<?> future = queueObject.future;
                             if (future == null || future.isDone()) {
                                 boolean execute = true;
@@ -1251,7 +1284,8 @@ public class Connection {
         logger.debug("Removed {} device(s) {} from queue", queueObject.hashCode(), serials);
     }
 
-    private void executeSequenceNodes(List<String> serialNumbers, JsonArray nodesToExecute, boolean parallel) {
+    private void executeSequenceNodes(List<String> serialNumbers, JsonArray nodesToExecute, boolean parallel,
+            long generation) {
         JsonObject serialNode = new JsonObject();
         if (parallel) {
             serialNode.addProperty("@type", "com.amazon.alexa.behaviors.model.ParallelNode");
@@ -1261,7 +1295,7 @@ public class Connection {
 
         serialNode.add("nodesToExecute", nodesToExecute);
 
-        executeSequenceNode(serialNumbers, serialNode);
+        executeSequenceNode(serialNumbers, serialNode, generation);
     }
 
     private JsonObject createExecutionNode(String deviceType, String serialNumber, String command,
@@ -1571,6 +1605,7 @@ public class Connection {
 
     private static class QueueObject {
         public @Nullable Future<?> future;
+        public long generation;
         public List<String> deviceSerialNumbers = List.of();
         public JsonObject nodeToExecute = new JsonObject();
     }
