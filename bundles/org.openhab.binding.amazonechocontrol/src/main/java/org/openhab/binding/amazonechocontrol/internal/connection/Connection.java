@@ -34,6 +34,7 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.Date;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -640,22 +641,25 @@ public class Connection {
         JsonObject requestObject = new JsonObject();
         JsonArray stateRequests = new JsonArray();
         Map<String, String> mergedApplianceMap = new HashMap<>();
+        Set<String> entityIdsWithoutState = new HashSet<>();
         for (SmartHomeBaseDevice device : devices) {
             String applianceId = device.findId();
             if (applianceId != null) {
                 JsonObject stateRequest;
-                if (device instanceof JsonSmartHomeDevice
-                        && ((JsonSmartHomeDevice) device).mergedApplianceIds != null) {
-                    List<String> mergedApplianceIds = Objects
-                            .requireNonNullElse(((JsonSmartHomeDevice) device).mergedApplianceIds, List.of());
+                List<String> mergedApplianceIds = device instanceof JsonSmartHomeDevice smartHomeDevice
+                        ? smartHomeDevice.mergedApplianceIds
+                        : null;
+                if (mergedApplianceIds != null && !mergedApplianceIds.isEmpty()) {
                     for (String idToMerge : mergedApplianceIds) {
                         mergedApplianceMap.put(idToMerge, applianceId);
+                        entityIdsWithoutState.add(idToMerge);
                         stateRequest = new JsonObject();
                         stateRequest.addProperty("entityId", idToMerge);
                         stateRequest.addProperty("entityType", "APPLIANCE");
                         stateRequests.add(stateRequest);
                     }
                 } else {
+                    entityIdsWithoutState.add(applianceId);
                     stateRequest = new JsonObject();
                     stateRequest.addProperty("entityId", applianceId);
                     stateRequest.addProperty("entityType", "APPLIANCE");
@@ -675,6 +679,7 @@ public class Connection {
             String applianceId = entity.get("entityId").getAsString();
             JsonElement capabilityState = deviceStateObject.get("capabilityStates");
             if (capabilityState != null && capabilityState.isJsonArray()) {
+                entityIdsWithoutState.remove(applianceId);
                 String realApplianceId = mergedApplianceMap.get(applianceId);
                 if (realApplianceId != null) {
                     var capabilityArray = result.get(realApplianceId);
@@ -688,6 +693,9 @@ public class Connection {
                     result.put(applianceId, capabilityState.getAsJsonArray());
                 }
             }
+        }
+        if (!entityIdsWithoutState.isEmpty()) {
+            logger.debug("Amazon returned no state for requested entities {}", entityIdsWithoutState);
         }
         return result;
     }
