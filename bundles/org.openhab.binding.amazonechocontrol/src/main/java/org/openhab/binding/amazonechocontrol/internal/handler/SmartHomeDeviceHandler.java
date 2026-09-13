@@ -248,7 +248,9 @@ public class SmartHomeDeviceHandler extends BaseThingHandler {
                 // for groups, store the last state of all devices
                 lastStates.put(applianceId, states);
             }
-            logger.debug("States for applianceId={}: {}", applianceId, states);
+            if (applianceIdToCapabilityStates.containsKey(applianceId)) {
+                logger.debug("States for applianceId={}: {}", applianceId, states);
+            }
 
             for (JsonElement stateElement : states) {
                 String stateJson = stateElement.getAsString();

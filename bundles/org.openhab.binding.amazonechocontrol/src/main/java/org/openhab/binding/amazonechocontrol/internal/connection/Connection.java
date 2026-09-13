@@ -668,8 +668,16 @@ public class Connection {
             }
         }
         requestObject.add("stateRequests", stateRequests);
+        logger.debug("Requesting smart home states for entities {}", entityIdsWithoutState);
         JsonObject responseObject = requestBuilder.post(getAlexaServer() + "/api/phoenix/state")
                 .withContent(requestObject).syncSend(JsonObject.class);
+
+        JsonElement errors = responseObject.get("errors");
+        if (errors != null && errors.isJsonArray()) {
+            for (JsonElement error : errors.getAsJsonArray()) {
+                logger.debug("Amazon reported a smart home state error: {}", error);
+            }
+        }
 
         JsonArray deviceStates = (JsonArray) responseObject.get("deviceStates");
         Map<String, JsonArray> result = new HashMap<>();
