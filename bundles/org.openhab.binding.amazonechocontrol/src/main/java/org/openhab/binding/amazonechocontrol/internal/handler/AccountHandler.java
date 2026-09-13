@@ -184,8 +184,8 @@ public class AccountHandler extends BaseBridgeHandler implements PushConnection.
 
         checkDataJob = scheduler.scheduleWithFixedDelay(this::checkLoginAndData, 0, 1, TimeUnit.SECONDS);
 
-        int pollingIntervalAlexa = Math.min(handlerConfig.pollingIntervalSmartHomeAlexa, 10);
-        int pollingIntervalSkills = Math.min(handlerConfig.pollingIntervalSmartSkills, 60);
+        int pollingIntervalAlexa = Math.max(handlerConfig.pollingIntervalSmartHomeAlexa, 10);
+        int pollingIntervalSkills = Math.max(handlerConfig.pollingIntervalSmartSkills, 60);
 
         smartHomeDeviceStateGroupUpdateCalculator = new SmartHomeDeviceStateGroupUpdateCalculator(pollingIntervalAlexa,
                 pollingIntervalSkills);
