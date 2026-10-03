@@ -15,9 +15,16 @@ package org.openhab.binding.amazonechocontrol.internal.handler;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 import org.eclipse.jdt.annotation.NonNullByDefault;
 import org.eclipse.jetty.client.HttpClient;
@@ -29,12 +36,14 @@ import org.openhab.binding.amazonechocontrol.internal.connection.Connection;
 import org.openhab.core.storage.Storage;
 import org.openhab.core.thing.Bridge;
 import org.openhab.core.thing.ThingUID;
+import org.openhab.core.thing.binding.ThingHandlerCallback;
 
 import com.google.gson.Gson;
 
 /**
  * Tests that installing a connection from the web proxy login leaves exactly one live connection behind: the
- * replaced one is closed, and a candidate that lost against dispose or close never replaces the current one.
+ * replaced one is closed, a candidate that lost against dispose or close never replaces the current one, and a
+ * logout finishes before a login can swap the connection.
  *
  * @author Martin Littkovsky - Initial contribution
  */
@@ -103,5 +112,29 @@ public class AccountHandlerConnectionSwapTest {
         assertNotSame(lateLoginCandidate, handler.getConnection());
         assertSame(current, handler.getConnection());
         assertTrue(lateLoginCandidate.isClosed());
+    }
+
+    @Test
+    public void aLoginWaitsForARunningLogoutInsteadOfOverlappingIt() throws Exception {
+        handler.setCallback(mock(ThingHandlerCallback.class));
+        Connection fresh = new Connection(null, gson, httpClient);
+        List<CompletableFuture<Void>> loginsDuringLogout = new ArrayList<>();
+        Connection loggingOut = new Connection(null, gson, httpClient) {
+            @Override
+            public void logout(boolean reset) {
+                if (loginsDuringLogout.isEmpty()) {
+                    CompletableFuture<Void> login = CompletableFuture.runAsync(() -> handler.setConnection(fresh));
+                    loginsDuringLogout.add(login);
+                    assertThrows(TimeoutException.class, () -> login.get(200, TimeUnit.MILLISECONDS));
+                }
+                super.logout(reset);
+            }
+        };
+        handler.setConnection(loggingOut);
+
+        handler.resetConnection(false);
+
+        loginsDuringLogout.get(0).get(5, TimeUnit.SECONDS);
+        assertSame(fresh, handler.getConnection());
     }
 }
