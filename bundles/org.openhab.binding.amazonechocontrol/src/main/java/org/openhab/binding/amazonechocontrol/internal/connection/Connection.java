@@ -414,10 +414,9 @@ public class Connection {
      * nextAlarmTime is
      * above {@link #connectionRenewalTime}
      *
-     * @return {@code true} when the session tokens have been renewed, {@code false} otherwise
      * @throws ConnectionException when an error occurred
      */
-    public boolean renewTokens() throws ConnectionException {
+    public void renewTokens() throws ConnectionException {
         if (System.currentTimeMillis() >= this.accessTokenRenewalTime) {
             String renewTokenPostData = "app_name=Amazon%20Alexa" //
                     + "&app_version=" + AmazonEchoControlBindingConstants.API_VERSION //
@@ -447,7 +446,6 @@ public class Connection {
                 exchangeToken(loginData.getRetailDomain());
             }
         }
-        return false;
     }
 
     static long renewalTime(long nowMillis, long lifetimeSeconds) {
