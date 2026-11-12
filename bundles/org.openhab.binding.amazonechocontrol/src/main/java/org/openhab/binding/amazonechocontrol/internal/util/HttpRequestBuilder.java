@@ -32,6 +32,7 @@ import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Semaphore;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
@@ -71,6 +72,7 @@ public class HttpRequestBuilder {
     private static final String AMZN_ERROR_TYPE_HEADER = "x-amzn-ErrorType";
     private static final String THROTTLING_EXCEPTION = "ThrottlingException";
     private static final String NO_REASON_GIVEN = "no reason given";
+    private static final long REQUEST_TIMEOUT_SECONDS = 30;
 
     private final Logger logger = LoggerFactory.getLogger(HttpRequestBuilder.class);
 
@@ -113,6 +115,7 @@ public class HttpRequestBuilder {
 
     private void createRequest(URI uri, RequestParams params, HttpResponseListener responseListener) {
         Request request = httpClient.newRequest(uri).method(params.method());
+        request.timeout(REQUEST_TIMEOUT_SECONDS, TimeUnit.SECONDS);
         request.header(ACCEPT_LANGUAGE, customHeader(params, ACCEPT_LANGUAGE).orElse("en-US"));
         request.header("DNT", "1");
         request.header("Upgrade-Insecure-Requests", "1");
