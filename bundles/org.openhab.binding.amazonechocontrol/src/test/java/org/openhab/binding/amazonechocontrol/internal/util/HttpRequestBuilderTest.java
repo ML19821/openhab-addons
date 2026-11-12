@@ -35,6 +35,8 @@ import java.net.UnknownHostException;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 import org.eclipse.jdt.annotation.NonNullByDefault;
 import org.eclipse.jetty.client.HttpClient;
@@ -218,6 +220,33 @@ public class HttpRequestBuilderTest {
 
         verify(request).agent(contains("AmazonWebView"));
         verify(request).header(HttpHeader.ACCEPT_LANGUAGE, "en-US");
+    }
+
+    @Test
+    @SuppressWarnings("null")
+    public void testARequestIsSentWithATimeout() {
+        Request request = mock(Request.class, RETURNS_SELF);
+
+        requestBuilderFor(request).get(REQUEST_URI.toString()).send();
+
+        verify(request).timeout(30, TimeUnit.SECONDS);
+    }
+
+    @Test
+    @SuppressWarnings("null")
+    public void testATimedOutRequestIsRetriedWithATimeout() {
+        Request retriedRequest = mock(Request.class, RETURNS_SELF);
+        Result timedOutResult = resultWithStatus(0, new HttpFields());
+        when(timedOutResult.getFailure()).thenReturn(new TimeoutException("Total timeout 30000 ms elapsed"));
+
+        CompletableFuture<HttpResponse> httpResponse = new CompletableFuture<>();
+        RequestParams params = new RequestParams(HttpMethod.GET, null, false, Map.of());
+        requestBuilderFor(retriedRequest).new HttpResponseListener(httpResponse, params, false, FailMode.RETRY)
+                .onComplete(timedOutResult);
+
+        verify(retriedRequest).timeout(30, TimeUnit.SECONDS);
+        verify(retriedRequest).send(any(Response.CompleteListener.class));
+        assertThat(httpResponse.isDone(), is(false));
     }
 
     private HttpRequestBuilder requestBuilderFor(Request request) {
