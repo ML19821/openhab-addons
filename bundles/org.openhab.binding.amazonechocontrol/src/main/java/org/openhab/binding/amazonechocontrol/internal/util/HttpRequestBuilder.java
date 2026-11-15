@@ -72,7 +72,7 @@ public class HttpRequestBuilder {
     private static final String AMZN_ERROR_TYPE_HEADER = "x-amzn-ErrorType";
     private static final String THROTTLING_EXCEPTION = "ThrottlingException";
     private static final String NO_REASON_GIVEN = "no reason given";
-    private static final long REQUEST_TIMEOUT_SECONDS = 30;
+    private static final long REQUEST_TIMEOUT_SECONDS = 10;
 
     private final Logger logger = LoggerFactory.getLogger(HttpRequestBuilder.class);
 
