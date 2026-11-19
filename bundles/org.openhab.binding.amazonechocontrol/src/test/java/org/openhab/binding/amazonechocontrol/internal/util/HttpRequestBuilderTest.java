@@ -217,7 +217,7 @@ public class HttpRequestBuilderTest {
 
         requestBuilderFor(request).get(REQUEST_URI.toString()).send();
 
-        verify(request).agent(contains("AmazonWebView"));
+        verify(request).agent(contains("PitanguiBridge"));
         verify(request).header(HttpHeader.ACCEPT_LANGUAGE, "en-US");
     }
 

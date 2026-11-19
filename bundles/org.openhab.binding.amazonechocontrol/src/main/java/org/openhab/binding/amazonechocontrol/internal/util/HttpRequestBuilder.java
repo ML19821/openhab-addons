@@ -17,8 +17,6 @@ import static org.eclipse.jetty.http.HttpMethod.*;
 import static org.eclipse.jetty.http.HttpStatus.*;
 import static org.eclipse.jetty.http.MimeTypes.Type.APPLICATION_JSON_UTF_8;
 import static org.eclipse.jetty.http.MimeTypes.Type.FORM_ENCODED;
-import static org.openhab.binding.amazonechocontrol.internal.AmazonEchoControlBindingConstants.API_VERSION;
-import static org.openhab.binding.amazonechocontrol.internal.AmazonEchoControlBindingConstants.DI_OS_VERSION;
 import static org.openhab.binding.amazonechocontrol.internal.util.HttpRequestBuilder.FailMode.*;
 
 import java.net.CookieManager;
@@ -67,8 +65,8 @@ import com.google.gson.reflect.TypeToken;
  */
 @NonNullByDefault
 public class HttpRequestBuilder {
-    private static final String DEFAULT_USER_AGENT = "AmazonWebView/Amazon Alexa/" + API_VERSION + "/iOS/"
-            + DI_OS_VERSION + "/iPhone";
+    private static final String DEFAULT_USER_AGENT = "AppleWebKit PitanguiBridge/2.2.595606.0"
+            + "-[HARDWARE=iPhone14_7][SOFTWARE=17.4.1][DEVICE=iPhone]";
     private static final String AMZN_ERROR_TYPE_HEADER = "x-amzn-ErrorType";
     private static final String THROTTLING_EXCEPTION = "ThrottlingException";
     private static final String NO_REASON_GIVEN = "no reason given";
