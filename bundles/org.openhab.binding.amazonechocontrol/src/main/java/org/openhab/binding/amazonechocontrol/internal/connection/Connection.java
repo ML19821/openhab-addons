@@ -197,6 +197,10 @@ public class Connection {
         ensureSequenceNodeDispatcherIsRunning();
     }
 
+    public void setUserAgent(String userAgent) {
+        requestBuilder.setUserAgent(userAgent);
+    }
+
     public HttpRequestBuilder getRequestBuilder() {
         return requestBuilder;
     }

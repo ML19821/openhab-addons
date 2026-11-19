@@ -79,11 +79,16 @@ public class HttpRequestBuilder {
     private final Gson gson;
     private final Lock lock = new ReentrantLock();
     private final Semaphore semaphore = new Semaphore(2, true);
+    private volatile String userAgent = DEFAULT_USER_AGENT;
 
     public HttpRequestBuilder(HttpClient httpClient, CookieManager cookieManager, Gson gson) {
         this.httpClient = httpClient;
         this.cookieManager = cookieManager;
         this.gson = gson;
+    }
+
+    public void setUserAgent(String userAgent) {
+        this.userAgent = userAgent.isBlank() ? DEFAULT_USER_AGENT : userAgent.strip();
     }
 
     public Builder get(String uriString) {
@@ -117,7 +122,7 @@ public class HttpRequestBuilder {
         request.header(ACCEPT_LANGUAGE, customHeader(params, ACCEPT_LANGUAGE).orElse("en-US"));
         request.header("DNT", "1");
         request.header("Upgrade-Insecure-Requests", "1");
-        request.agent(customHeader(params, USER_AGENT).orElse(DEFAULT_USER_AGENT));
+        request.agent(customHeader(params, USER_AGENT).orElse(userAgent));
         params.customHeaders().entrySet().stream()
                 .filter(header -> !header.getValue().isBlank() && !USER_AGENT.is(header.getKey())
                         && !ACCEPT_LANGUAGE.is(header.getKey()))
